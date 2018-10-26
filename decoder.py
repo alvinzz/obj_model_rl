@@ -96,7 +96,7 @@ if __name__ == '__main__':
         params['dec.'+k.replace('__', '.')] = v
     optimizer = optim.Adam(params.values(), lr=learning_rate)
 
-    data = h5py.File('/home/alvin/Windows/Downloads/obj_balls.h5', 'r')
+    data = h5py.File('data/obj_balls.h5', 'r')
     gt_pos = np.round(data['training']['positions'][:5,0]*4).astype(np.uint8)
     # ims = np.zeros([1, 1, 64, 64], dtype=np.float32)
     # for i in range(1):

@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import h5py
 
-data = h5py.File('/home/alvin/Windows/Downloads/obj_balls.h5', 'r')
+data = h5py.File('data/obj_balls.h5', 'r')
 #import ipdb; ipdb.set_trace()
 print('loading im')
 # ims = data['training']['groups'][:,0,:,:,0].astype(np.uint8)*63

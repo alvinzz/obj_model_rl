@@ -85,7 +85,7 @@ if __name__ == '__main__':
     model = Encoder().to(device)
     optimizer = optim.Adam(model.parameters(), lr=0.1)
 
-    data = h5py.File('/home/alvin/Windows/Downloads/obj_balls.h5', 'r')
+    data = h5py.File('data/obj_balls.h5', 'r')
     ims = np.tile(data['training']['features'][:1,0,:,:,0] - 0.5, [3,1,1,1]).transpose([1,0,2,3]).astype(np.float32)
     ims_tensor = torch.tensor(ims, device=device)
 
