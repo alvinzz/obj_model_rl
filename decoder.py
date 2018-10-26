@@ -82,11 +82,10 @@ if __name__ == '__main__':
     reconstr_weight = 1.0
     learning_rate = 0.001
     mb_size = 20
-    train_frac = 0.8
-    val_frac = 0.1
 
     use_cuda = torch.cuda.is_available()
     torch.manual_seed(0)
+    np.random.seed(0)
     device = torch.device("cuda" if use_cuda else "cpu")
 
     enc = Encoder().to(device)
@@ -99,7 +98,8 @@ if __name__ == '__main__':
     optimizer = optim.Adam(params.values(), lr=learning_rate)
 
     data = h5py.File('data/obj_balls.h5', 'r')
-    data_len = data['training']['features'].shape[1]
+    train_data_len = data['training']['features'].shape[1]
+    val_data_len = data['validation']['features'].shape[1]
 
     prior = np.array([(64*64-4)/(64*64.), 4/(64*64.)]).astype(np.float32)
     prior = np.reshape(prior, [1, -1, 1, 1])
@@ -109,11 +109,10 @@ if __name__ == '__main__':
     enc.train()
     dec.train()
     for epoch in range(100):
-        data_inds = np.arange(int(data_len * train_frac))
-        np.random.shuffle(data_inds)
-        for mb in range(data_len // mb_size):
-            mb_inds = sorted(data_inds[mb_size*mb : mb_size*(mb+1)])
-            ims = np.tile(data['training']['features'][0,mb_inds,:,:,0] - 0.5, [3,1,1,1]).transpose([1,0,2,3]).astype(np.float32)
+        start_inds = np.arange(train_data_len // mb_size)
+        np.random.shuffle(start_inds)
+        for start_ind in start_inds:
+            ims = np.tile(data['training']['features'][0,start_ind*mb_size:(start_ind+1)*mb_size,:,:,0] - 0.5, [3,1,1,1]).transpose([1,0,2,3]).astype(np.float32)
             ims_tensor = torch.tensor(ims, device=device)
 
             latent = enc(ims_tensor)
@@ -132,20 +131,31 @@ if __name__ == '__main__':
             )
             kl_weight = (epoch-10)/9. if epoch > 10 else 0
             loss = kl_weight*kl_loss + reconstr_weight*reconstr_loss
+            print(loss.detach().cpu().numpy())
             loss.backward()
             optimizer.step()
         if epoch % 1 == 0:
             print(epoch, kl_weight*kl_loss.detach().cpu().numpy(), reconstr_weight*reconstr_loss.detach().cpu().numpy())
     print(epoch, kl_weight*kl_loss.detach().cpu().numpy(), reconstr_weight*reconstr_loss.detach().cpu().numpy())
 
-    val_inds = np.arange(int(data_len * train_frac), int(data_len * (train_frac+val_frac)))
+    val_inds = np.arange(val_data_len)
     np.random.shuffle(val_inds)
-    for i in range(5):
-        latent_im = latent.detach().cpu().numpy()[val_inds[i], 0]
-        samples_im = samples.detach().cpu().numpy()[val_inds[i], 0]
-        input_im = ims_tensor.detach().cpu().numpy()[val_inds[i], 0]+0.5
-        reconstr_im = reconstr.detach().cpu().numpy()[val_inds[i], 0]+0.5
-        cv2.imwrite('data/latent_{}.png'.format(i), (255*np.clip(latent_im, 0, 1)).astype(np.uint8))
-        cv2.imwrite('data/sampled_{}.png'.format(i), (255*np.clip(samples_im, 0, 1)).astype(np.uint8))
-        cv2.imwrite('data/im_{}.png'.format(i), (255*np.clip(input_im, 0, 1)).astype(np.uint8))
-        cv2.imwrite('data/reconstr_{}.png'.format(i), (255*np.clip(reconstr_im, 0, 1)).astype(np.uint8))
+    for val_ind in val_inds[:5]:
+        ims = np.tile(data['validation']['features'][0,val_ind:val_ind+1,:,:,0] - 0.5, [3,1,1,1]).transpose([1,0,2,3]).astype(np.float32)
+        ims_tensor = torch.tensor(ims, device=device)
+
+        latent = enc(ims_tensor)
+        samples = gumbel_softmax_sample(
+            logits=latent.permute(0, 2, 3, 1),
+            temperature=0.1,
+        ).permute(0, 3, 1, 2)
+        reconstr = dec(samples)
+
+        latent_im = latent.detach().cpu().numpy()[0, 0]
+        samples_im = samples.detach().cpu().numpy()[0, 0]
+        input_im = ims_tensor.detach().cpu().numpy()[0, 0]+0.5
+        reconstr_im = reconstr.detach().cpu().numpy()[0, 0]+0.5
+        cv2.imwrite('data/latent_{}.png'.format(val_ind), (255*np.clip(latent_im, 0, 1)).astype(np.uint8))
+        cv2.imwrite('data/sampled_{}.png'.format(val_ind), (255*np.clip(samples_im, 0, 1)).astype(np.uint8))
+        cv2.imwrite('data/im_{}.png'.format(val_ind), (255*np.clip(input_im, 0, 1)).astype(np.uint8))
+        cv2.imwrite('data/reconstr_{}.png'.format(val_ind), (255*np.clip(reconstr_im, 0, 1)).astype(np.uint8))
