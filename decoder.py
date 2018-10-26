@@ -98,6 +98,10 @@ if __name__ == '__main__':
     optimizer = optim.Adam(params.values(), lr=learning_rate)
 
     data = h5py.File('data/obj_balls.h5', 'r')
+    print('extracting datasets to numpy...')
+    train_data = data['training']['features'][()]
+    val_data = data['validation']['features'][()]
+    print('done!')
     train_data_len = data['training']['features'].shape[1]
     val_data_len = data['validation']['features'].shape[1]
 
@@ -112,7 +116,7 @@ if __name__ == '__main__':
         start_inds = np.arange(train_data_len // mb_size)
         np.random.shuffle(start_inds)
         for start_ind in start_inds:
-            ims = np.tile(data['training']['features'][0,start_ind*mb_size:(start_ind+1)*mb_size,:,:,0] - 0.5, [3,1,1,1]).transpose([1,0,2,3]).astype(np.float32)
+            ims = train_data[0,start_ind*mb_size:(start_ind+1)*mb_size,:,:,0] - 0.5, [3,1,1,1]).transpose([1,0,2,3]).astype(np.float32)
             ims_tensor = torch.tensor(ims, device=device)
 
             latent = enc(ims_tensor)
@@ -141,7 +145,7 @@ if __name__ == '__main__':
     val_inds = np.arange(val_data_len)
     np.random.shuffle(val_inds)
     for val_ind in val_inds[:5]:
-        ims = np.tile(data['validation']['features'][0,val_ind:val_ind+1,:,:,0] - 0.5, [3,1,1,1]).transpose([1,0,2,3]).astype(np.float32)
+        ims = np.tile(val_data[0,val_ind:val_ind+1,:,:,0] - 0.5, [3,1,1,1]).transpose([1,0,2,3]).astype(np.float32)
         ims_tensor = torch.tensor(ims, device=device)
 
         latent = enc(ims_tensor)
