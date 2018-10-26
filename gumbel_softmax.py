@@ -34,6 +34,8 @@ def hard_gumbel_softmax_sample(logits, temperature, eps=1e-20):
 
 if __name__ == '__main__':
     logits = np.array([0.5, 5*0.04, 5*0.03, 5*0.02, 5*0.01], dtype=np.float32)
-    for temperature in [0.01, 0.1, 1.0, 10.0]:
-        samples = gumbel_softmax_sample(Variable(torch.Tensor(np.tile(logits, [10, 1]), device=device)), temperature)
-        print(samples)
+    logits = np.reshape(np.tile(logits, 1000*4), (1000, 5, 2, 2))
+    print(logits[0])
+    for temperature in [0.01]:
+        samples = np.transpose(gumbel_softmax_sample(Variable(torch.Tensor(np.transpose(logits, [0,2,3,1]), device=device)), temperature).cpu().numpy(), [0,3,1,2])
+        print(np.sum(samples, axis=0))
