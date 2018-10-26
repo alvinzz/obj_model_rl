@@ -4,9 +4,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from gumbel_softmax import gumbel_softmax_sample
 
 class Decoder(nn.Module):
-    def __init__(self, channels=[16, 16, 3], obj_classes=2):
+    def __init__(self, channels=[9, 36, 36, 3], obj_classes=2):
         # num_obj_classes includes background class
         super(Decoder, self).__init__()
 
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     import cv2
     from encoder import Encoder
 
-    kl_weight = 1.0
+    kl_weight = 0.0
     reconstr_weight = 1.0
     learning_rate = 0.001
 
@@ -88,7 +89,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if use_cuda else "cpu")
 
     enc = Encoder().to(device)
-    dec = Decoder([9, 36, 3]).to(device)
+    dec = Decoder().to(device)
     params = {}
     for (k, v) in enc.named_parameters():
         params['enc.'+k.replace('__', '.')] = v
@@ -97,14 +98,14 @@ if __name__ == '__main__':
     optimizer = optim.Adam(params.values(), lr=learning_rate)
 
     data = h5py.File('data/obj_balls.h5', 'r')
-    gt_pos = np.round(data['training']['positions'][:5,0]*4).astype(np.uint8)
-    # ims = np.zeros([1, 1, 64, 64], dtype=np.float32)
-    # for i in range(1):
-    #     for pos in gt_pos[i]:
-    #         ims[i, 0] = cv2.circle(ims[i, 0], tuple(pos), 5, 1, -1)
-    # ims = np.tile(ims, [1, 3, 1, 1]) - 0.5
-    # ims_tensor = torch.tensor(ims, device=device)
-    ims = np.tile(data['training']['features'][:5,0,:,:,0] - 0.5, [3,1,1,1]).transpose([1,0,2,3]).astype(np.float32)
+    gt_pos = np.round(data['training']['positions'][49,[0,11,222,3333,4444]]*4).astype(np.uint8)
+    #ims = np.zeros([5, 1, 64, 64], dtype=np.float32)
+    #for i in range(5):
+    #    for pos in gt_pos[i]:
+    #        ims[i, 0] = cv2.circle(ims[i, 0], tuple(pos), 10, 1, -1)
+    #ims = np.tile(ims, [1, 3, 1, 1]) - 0.5
+    #ims_tensor = torch.tensor(ims, device=device)
+    ims = np.tile(data['training']['features'][49,[0,11,222,3333,44444],:,:,0] - 0.5, [3,1,1,1]).transpose([1,0,2,3]).astype(np.float32)
     ims_tensor = torch.tensor(ims, device=device)
 
     gt_latent = np.zeros([5, 2, 64, 64], dtype=np.float32)
@@ -123,37 +124,43 @@ if __name__ == '__main__':
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
 
-    prior = np.array([60./64, 4./64]).astype(np.float32)
+    prior = np.array([(64*64-4)/(64*64.), 4/(64*64.)]).astype(np.float32)
     prior = np.reshape(prior, [1, -1, 1, 1])
-    prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]))
+    prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
     eps = 1e-20
 
     enc.train()
     dec.train()
-    for itr in range(50):
-        # latent = enc(ims_tensor)
-        latent = gt_tensor
-        reconstr = dec(latent)
+    for itr in range(10000):
+        latent = enc(ims_tensor)
+        samples = gumbel_softmax_sample(
+            logits=latent.permute(0, 2, 3, 1),
+            temperature=0.1,
+        ).permute(0, 3, 1, 2)
+        reconstr = dec(samples)
 
         optimizer.zero_grad()
-        # kl_loss = torch.mean(
-        #     latent * (torch.log(latent+eps) - torch.log(prior+eps)),
-        # )
         kl_loss = torch.mean(
-            latent[:,0] * (torch.log(latent[:,0]+eps) - torch.log(gt_tensor[:,0]+eps)),
+            latent * (torch.log(latent+eps) - torch.log(prior+eps)),
         )
         reconstr_loss = torch.mean(
             (ims_tensor - reconstr)**2
         )
+        kl_weight = (itr-1000)/1000. if itr > 1000 else 0
         loss = kl_weight*kl_loss + reconstr_weight*reconstr_loss
-        print(itr, loss.detach().numpy())
+        print(itr, kl_weight*kl_loss.detach().cpu().numpy(), reconstr_weight*reconstr_loss.detach().cpu().numpy())
         loss.backward()
         optimizer.step()
     for i in range(5):
-        latent_im = latent.detach().numpy()[i, 0]
-        cv2.imshow('latent', latent_im)
-        # cv2.imshow('gt', gt_tensor.detach().numpy()[0, 0])
-        cv2.imshow('im', ims_tensor.detach().numpy()[i, 0]+0.5)
-        cv2.imshow('reconstr', reconstr.detach().numpy()[i, 0]+0.5)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        latent_im = latent.detach().cpu().numpy()[i, 0]
+        samples_im = samples.detach().cpu().numpy()[i, 0]
+        gt_im = gt_tensor.detach().cpu().numpy()[i, 0]
+        input_im = ims_tensor.detach().cpu().numpy()[i, 0]+0.5
+        reconstr_im = reconstr.detach().cpu().numpy()[i, 0]+0.5
+        cv2.imwrite('data/latent_{}.png'.format(i), (255*np.clip(latent_im, 0, 1)).astype(np.uint8))
+        cv2.imwrite('data/sampled_{}.png'.format(i), (255*np.clip(samples_im, 0, 1)).astype(np.uint8))
+        # cv2.imwrite('gt.png', gt_im)
+        # cv2.imwrite('im.png', input_im)
+        cv2.imwrite('data/reconstr_{}.png'.format(i), (255*np.clip(reconstr_im, 0, 1)).astype(np.uint8))
+        #cv2.waitKey(0)
+        #cv2.destroyAllWindows()
