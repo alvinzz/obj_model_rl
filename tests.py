@@ -32,7 +32,8 @@ def test_autoencoder():
     val_data = data['validation']['groups'][:1,:5]
     print('done!')
 
-    prior = np.array([(64*64-4)/(64*64.), 2/(64*64.), 2/(64*64.)]).astype(np.float32)
+    # prior = np.array([(64*64-4)/(64*64.), 2/(64*64.), 2/(64*64.)]).astype(np.float32)
+    prior = np.array([(64*64-2)/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
     prior = np.reshape(prior, [1, -1, 1, 1])
     prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
 
