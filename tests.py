@@ -21,7 +21,7 @@ import pickle
 def test_autoencoder():
     kl_weight = 1.0
     reconstr_weight = 1.0
-    learning_rate = 0.001
+    learning_rate = 0.1
     mb_size = 64
 
     use_cuda = torch.cuda.is_available()
@@ -43,7 +43,8 @@ def test_autoencoder():
     #for (k,v) in saved_weights.items():
     #    params[k].data = torch.from_numpy(v).to(device)
 
-    optimizer = optim.Adam(params.values(), lr=learning_rate)
+    #optimizer = optim.Adam(params.values(), lr=learning_rate)
+    optimizer = optim.SGD(params.values(), lr=learning_rate)
 
     data = h5py.File('data/obj_balls.h5', 'r')
     print('extracting datasets to numpy...')
@@ -99,8 +100,9 @@ def test_autoencoder():
             # reconstr = dec(latent)
 
             optimizer.zero_grad()
-            #avg_latent = torch.mean(torch.mean(latent, dim=2), dim=2)
+            avg_latent = torch.mean(torch.mean(latent, dim=2), dim=2)
             avg_latent = torch.mean(torch.mean(samples, dim=2), dim=2)
+            print(torch.mean(avg_latent, dim=0), prior)
             kl_loss = torch.mean(
                 avg_latent * (torch.log(avg_latent+eps) - torch.log(prior+eps)),
             )
@@ -108,7 +110,9 @@ def test_autoencoder():
                 (ims_tensor - reconstr)**2
             )
             #kl_weight = epoch / 30. # original
-            kl_weight = 1. / 1000000. #to train ae
+            #kl_weight = 1. / 33000. #to train ae
+            kl_weight = 1.
+            reconstr_weight = 0.
 
             kl_loss *= kl_weight
             reconstr_loss *= reconstr_weight
@@ -202,14 +206,14 @@ def test_autoencoder():
         samples_im = (samples.detach().cpu().numpy()[0, :]).transpose([1,2,0])
         input_im = (ims_tensor.detach().cpu().numpy()[0, :]+0.5).transpose([1,2,0])
         reconstr_im = (reconstr.detach().cpu().numpy()[0, :]+0.5).transpose([1,2,0])
-        pickle.dump(latent_im, open('data/{}/latent_{}.pkl'.format(logdir, val_ind), 'wb'))
-        pickle.dump(samples_im, open('data/{}/sampled_{}.pkl'.format(logdir, val_ind), 'wb'))
-        pickle.dump(reconstr_im, open('data/{}/reconstr_{}.pkl'.format(logdir, val_ind), 'wb'))
-        pickle.dump(input_im, open('data/{}/im_{}.pkl'.format(logdir, val_ind), 'wb'))
-        cv2.imwrite('data/{}/latent_{}.png'.format(logdir, val_ind), (255*np.clip(latent_im, 0, 1)).astype(np.uint8)[:,:,-3:])
-        cv2.imwrite('data/{}/sampled_{}.png'.format(logdir, val_ind), (255*np.clip(samples_im, 0, 1)).astype(np.uint8)[:,:,-3:])
-        cv2.imwrite('data/{}/im_{}.png'.format(logdir, val_ind), (255*np.clip(input_im, 0, 1)).astype(np.uint8))
-        cv2.imwrite('data/{}/reconstr_{}.png'.format(logdir, val_ind), (255*np.clip(reconstr_im, 0, 1)).astype(np.uint8))
+        pickle.dump(latent_im, open('data/{}/{}/latent_{}.pkl'.format(logdir, epoch, val_ind), 'wb'))
+        pickle.dump(samples_im, open('data/{}/{}/sampled_{}.pkl'.format(logdir, epoch, val_ind), 'wb'))
+        pickle.dump(reconstr_im, open('data/{}/{}/reconstr_{}.pkl'.format(logdir, epoch, val_ind), 'wb'))
+        pickle.dump(input_im, open('data/{}/{}/im_{}.pkl'.format(logdir, epoch, val_ind), 'wb'))
+        cv2.imwrite('data/{}/{}/latent_{}.png'.format(logdir, epoch, val_ind), (255*np.clip(latent_im, 0, 1)).astype(np.uint8)[:,:,-3:])
+        cv2.imwrite('data/{}/{}/sampled_{}.png'.format(logdir, epoch, val_ind), (255*np.clip(samples_im, 0, 1)).astype(np.uint8)[:,:,-3:])
+        cv2.imwrite('data/{}/{}/im_{}.png'.format(logdir, epoch, val_ind), (255*np.clip(input_im, 0, 1)).astype(np.uint8))
+        cv2.imwrite('data/{}/{}/reconstr_{}.png'.format(logdir, epoch, val_ind), (255*np.clip(reconstr_im, 0, 1)).astype(np.uint8))
 
 if __name__ == '__main__':
     test_autoencoder()
