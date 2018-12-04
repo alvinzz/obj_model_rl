@@ -53,7 +53,7 @@ class Encoder(nn.Module):
         self.feats = []
         for i in range(len(self.channels)-1):
             self.layers.append(
-                F.elu(
+                F.relu(
                     self.conv_ops[i](
                         self.point_ops[i](
                             nn.ReflectionPad2d(3**i)(

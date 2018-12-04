@@ -55,7 +55,7 @@ class Decoder(nn.Module):
         for obj_class in range(self.obj_classes):
             for i in range(len(self.channels)-1):
                 self.class_layer_dict[obj_class].append(
-                    F.elu(
+                    identity(
                         self.point_ops[obj_class][i](
                             self.conv_ops[obj_class][i](
                                 self.class_layer_dict[obj_class][-1]
@@ -72,3 +72,6 @@ class Decoder(nn.Module):
         )
         self.objects = self.combine_classes_op(self.classes)
         return self.objects
+
+def identity(x):
+    return x
