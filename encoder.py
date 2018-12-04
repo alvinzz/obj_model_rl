@@ -45,7 +45,7 @@ class Encoder(nn.Module):
         self.feats_to_classes_op = nn.Conv2d(
             in_channels=sum(self.scale_feats), out_channels=obj_classes,
             kernel_size=1, stride=1, padding=0, dilation=1,
-            groups=1, bias=False,
+            groups=1, bias=True,
         )
 
     def forward(self, x):
