@@ -13,7 +13,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         self.channels = channels
-        self.obj_classes = obj_classes
+        self.obj_classes = obj_classes + 1
 
         self.point_ops = {}
         self.conv_ops = {}
@@ -48,6 +48,7 @@ class Decoder(nn.Module):
         )
 
     def forward(self, x):
+        x = torch.cat((torch.zeros_like(x[:, :1, :, :], dtype=torch.float32), x), dim=1)
         self.class_layer_dict = {
             obj_class: [x[:, obj_class:obj_class+1, :, :].repeat(1, self.channels[0], 1, 1)]
             for obj_class in range(self.obj_classes)

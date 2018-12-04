@@ -66,7 +66,7 @@ class Encoder(nn.Module):
             if self.scale_feats[i+1] > 0:
                 self.feats.append(self.layers[-1][:, -self.scale_feats[i+1]:, :, :])
         self.feats = torch.cat(self.feats, dim=1)
-        self.obj_probs = nn.Softmax(dim=1)(
+        self.obj_probs = F.relu(
             self.feats_to_classes_op(self.feats)
         )
         return self.obj_probs

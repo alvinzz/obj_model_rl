@@ -44,25 +44,25 @@ def test_autoencoder():
     train_dataloader = DataLoader(train_dataset, batch_size=mb_size, shuffle=True, num_workers=8)
     val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=True, num_workers=1)
 
-    enc = Encoder([3,96,96,3], [0,0,0,3], 3).to(device)
-    dec = Decoder([9,96,96,3], 3).to(device)
+    enc = Encoder([3,96,96,2], [0,0,0,2], 2).to(device)
+    dec = Decoder([9,96,96,3], 2).to(device)
     params = {}
     for (k, v) in enc.named_parameters():
         params['enc.'+k.replace('__', '.')] = v
     for (k, v) in dec.named_parameters():
         params['dec.'+k.replace('__', '.')] = v
-    saved_weights = pickle.load(open('data/ae_kl_100_04-12-2018_01-15/2/params.pkl', 'rb'))
-    for (k,v) in saved_weights.items():
-        params[k].data = torch.from_numpy(v).to(device)
+    #saved_weights = pickle.load(open('data/ae_kl_100_04-12-2018_01-15/2/params.pkl', 'rb'))
+    #for (k,v) in saved_weights.items():
+    #    params[k].data = torch.from_numpy(v).to(device)
     optimizer = optim.Adam(params.values(), lr=learning_rate)
 
     #prior = np.array([(64*64-2)/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
-    prior = np.array([1/(64*64.), (64*64-2)/(64*64.), 1/(64*64.)]).astype(np.float32)
+    #prior = np.array([1/(64*64.), (64*64-2)/(64*64.), 1/(64*64.)]).astype(np.float32)
     #prior = np.array([(64*64-3)/(64*64.), 1/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
-    prior = np.reshape(prior, [1, -1, 1, 1])
-    prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
+    #prior = np.reshape(prior, [1, -1, 1, 1])
+    #prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
 
-    logdir = 'ae_kl_300_' + time.strftime("%d-%m-%Y_%H-%M")
+    logdir = 'ae_relu_kl_1_' + time.strftime("%d-%m-%Y_%H-%M")
     n_validation_samples = 5
     eps = 1e-20
     enc.train()
@@ -75,13 +75,13 @@ def test_autoencoder():
             latent, samples, reconstr = model_forward(ims_tensor)
 
             optimizer.zero_grad()
-            kl_loss = torch.mean(
-                latent * (torch.log(latent+eps) - torch.log(prior+eps)),
-            )
+            sampled_beta = torch.mean(samples)
+            kl_loss = torch.mean(torch.log(sampled_beta) + (1/64*64)/sampled_beta)
+            # kl_loss = sampled_beta
             reconstr_loss = torch.mean(
                 (ims_tensor - reconstr)**2
             )
-            kl_weight = (epoch+1) / 300.
+            kl_weight = epoch
             loss = kl_weight*kl_loss + reconstr_weight*reconstr_loss
             loss.backward()
             optimizer.step()
@@ -120,7 +120,7 @@ class ObjDataset(Dataset):
         return new_im
 
 def ae_forward(enc, dec, ims_tensor):
-    latent = enc(ims_tensor)
+    latent = 1 - torch.exp(-enc(ims_tensor))
     samples = gumbel_softmax_sample(
         logits=latent.permute(0, 2, 3, 1),
         temperature=0.1,
@@ -148,7 +148,9 @@ def validate_model(logdir, epoch, val_dataloader, n_validation_samples, model_fo
         latent, samples, reconstr = model_forward(ims_tensor)
 
         latent_im = (latent.detach().cpu().numpy()[0, :]).transpose([1, 2, 0])
+        latent_im = np.concatenate((np.zeros_like(latent_im[:,:,:1]), latent_im), axis=2)
         samples_im = (samples.detach().cpu().numpy()[0, :]).transpose([1, 2, 0])
+        samples_im = np.concatenate((np.zeros_like(samples_im[:,:,:1]), samples_im), axis=2)
         input_im = (ims_tensor.detach().cpu().numpy()[0, :]).transpose([1, 2, 0])
         reconstr_im = (reconstr.detach().cpu().numpy()[0, :]).transpose([1, 2, 0])
         pickle.dump(latent_im, open('data/{}/{}/latent_{}.pkl'.format(logdir, epoch, val_ind), 'wb'))
