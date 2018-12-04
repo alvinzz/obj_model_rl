@@ -38,26 +38,31 @@ def test_autoencoder():
     train_data = data['training']['groups'][:1,:].transpose([1,0,2,3,4])
     val_data = data['validation']['groups'][:1,:].transpose([1,0,2,3,4])
     print('done!')
+
     train_dataset = ObjDataset(train_data, device)
     val_dataset = ObjDataset(val_data, device)
     train_dataloader = DataLoader(train_dataset, batch_size=mb_size, shuffle=True, num_workers=8)
     val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=True, num_workers=1)
 
     enc = Encoder([3,96,96,3], [0,0,0,3], 3).to(device)
-    dec = Decoder([9,36,36,3], 3).to(device)
+    dec = Decoder([9,96,96,3], 3).to(device)
     params = {}
     for (k, v) in enc.named_parameters():
         params['enc.'+k.replace('__', '.')] = v
     for (k, v) in dec.named_parameters():
         params['dec.'+k.replace('__', '.')] = v
+    saved_weights = pickle.load(open('data/ae_kl_100_04-12-2018_01-15/2/params.pkl', 'rb'))
+    for (k,v) in saved_weights.items():
+        params[k].data = torch.from_numpy(v).to(device)
     optimizer = optim.Adam(params.values(), lr=learning_rate)
 
-    prior = np.array([(64*64-2)/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
+    #prior = np.array([(64*64-2)/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
+    prior = np.array([1/(64*64.), (64*64-2)/(64*64.), 1/(64*64.)]).astype(np.float32)
     #prior = np.array([(64*64-3)/(64*64.), 1/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
     prior = np.reshape(prior, [1, -1, 1, 1])
     prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
 
-    logdir = 'ae_kl_1000'
+    logdir = 'ae_kl_300_' + time.strftime("%d-%m-%Y_%H-%M")
     n_validation_samples = 5
     eps = 1e-20
     enc.train()
@@ -76,7 +81,7 @@ def test_autoencoder():
             reconstr_loss = torch.mean(
                 (ims_tensor - reconstr)**2
             )
-            kl_weight = epoch / 1000.
+            kl_weight = (epoch+1) / 300.
             loss = kl_weight*kl_loss + reconstr_weight*reconstr_loss
             loss.backward()
             optimizer.step()
@@ -125,7 +130,6 @@ def ae_forward(enc, dec, ims_tensor):
     return latent, samples, reconstr
 
 def validate_model(logdir, epoch, val_dataloader, n_validation_samples, model_forward, params, device):
-    logdir += ('_' + time.strftime("%d-%m-%Y_%H-%M"))
     try:
         os.system('mkdir data/{}'.format(logdir))
         os.system('mkdir data/{}/{}'.format(logdir, epoch))
