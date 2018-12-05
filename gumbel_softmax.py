@@ -5,15 +5,14 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import numpy as np
 
-#if torch.cuda.is_available():
-#    device = torch.device("cuda")
-#else:
-#    device = torch.device("cpu")
-device = torch.device("cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+else:
+    device = torch.device("cpu")
 
 def sample_gumbel(shape, eps=1e-20):
     U = torch.rand(shape, dtype=torch.float32, device=device)
-    return -Variable(torch.log(-torch.log(U + eps) + eps))
+    return -Variable(torch.log(-torch.log(U + eps) + eps)).to(device)
 
 def gumbel_softmax_sample(logits, temperature, eps=1e-20):
     y = torch.log(logits + eps) + sample_gumbel(logits.size())
