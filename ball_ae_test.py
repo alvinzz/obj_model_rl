@@ -35,8 +35,8 @@ def test_autoencoder():
 
     data = h5py.File('data/obj_balls.h5', 'r')
     print('extracting datasets to numpy...')
-    train_data = data['training']['groups'][:1,:].transpose([1,0,2,3,4])
-    val_data = data['validation']['groups'][:1,:].transpose([1,0,2,3,4])
+    train_data = data['training']['groups'][:1,:6400].transpose([1,0,2,3,4])
+    val_data = data['validation']['groups'][:1,:5].transpose([1,0,2,3,4])
     print('done!')
 
     train_dataset = ObjDataset(train_data, device)
@@ -54,8 +54,10 @@ def test_autoencoder():
     #saved_weights = pickle.load(open('data/ae_kl_100_04-12-2018_01-15/2/params.pkl', 'rb'))
     #for (k,v) in saved_weights.items():
     #    params[k].data = torch.from_numpy(v).to(device)
-    for (k,v) in params.items():
-        if k.startswith('enc') and k.endswith('bias'):
+    for (k, v) in params.items():
+        if k.endswith('weight'):
+            torch.nn.init.xavier_uniform(v)
+        if k.endswith('bias'):
             v.data = 0.5*torch.ones_like(v.data).to(device)
     optimizer = optim.Adam(params.values(), lr=learning_rate)
 
@@ -73,7 +75,7 @@ def test_autoencoder():
     model_forward = lambda ims_tensor: ae_forward(enc, dec, ims_tensor)
     for epoch in range(10): #10 #30
         for (train_ind, rollout) in tqdm(enumerate(train_dataloader)):
-            if train_ind >= 1:
+            if train_ind >= 50:
                 break
             rollout = rollout.to(device)
             ims_tensor = rollout.reshape(-1, 3, 64, 64)
