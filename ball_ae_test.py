@@ -35,8 +35,8 @@ def test_autoencoder():
 
     data = h5py.File('data/obj_balls.h5', 'r')
     print('extracting datasets to numpy...')
-    train_data = data['training']['groups'][:1,:6400].transpose([1,0,2,3,4])
-    val_data = data['validation']['groups'][:1,:5].transpose([1,0,2,3,4])
+    train_data = data['training']['groups'][:1,:].transpose([1,0,2,3,4])
+    val_data = data['validation']['groups'][:1,:].transpose([1,0,2,3,4])
     print('done!')
 
     train_dataset = ObjDataset(train_data, device)
@@ -54,11 +54,6 @@ def test_autoencoder():
     #saved_weights = pickle.load(open('data/ae_kl_100_04-12-2018_01-15/2/params.pkl', 'rb'))
     #for (k,v) in saved_weights.items():
     #    params[k].data = torch.from_numpy(v).to(device)
-    for (k, v) in params.items():
-        if k.endswith('weight'):
-            torch.nn.init.xavier_uniform(v)
-        if k.endswith('bias'):
-            v.data = 0.5*torch.ones_like(v.data).to(device)
     optimizer = optim.Adam(params.values(), lr=learning_rate)
 
     #prior = np.array([(64*64-2)/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
@@ -67,7 +62,7 @@ def test_autoencoder():
     #prior = np.reshape(prior, [1, -1, 1, 1])
     #prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
 
-    logdir = 'ae_relu_kl_0_' + time.strftime("%d-%m-%Y_%H-%M")
+    logdir = 'ae_relu_kl_300_' + time.strftime("%d-%m-%Y_%H-%M")
     n_validation_samples = 5
     eps = 1e-20
     enc.train()
@@ -75,8 +70,6 @@ def test_autoencoder():
     model_forward = lambda ims_tensor: ae_forward(enc, dec, ims_tensor)
     for epoch in range(10): #10 #30
         for (train_ind, rollout) in tqdm(enumerate(train_dataloader)):
-            if train_ind >= 50:
-                break
             rollout = rollout.to(device)
             ims_tensor = rollout.reshape(-1, 3, 64, 64)
             latent, samples, reconstr = model_forward(ims_tensor)
@@ -88,8 +81,8 @@ def test_autoencoder():
             reconstr_loss = torch.mean(
                 (ims_tensor - reconstr)**2
             )
-            #kl_weight = epoch / 300.
-            kl_weight = 0
+            kl_weight = (epoch+1) / 300.
+            #kl_weight = 0
             loss = kl_weight*kl_loss + reconstr_weight*reconstr_loss
             loss.backward()
             optimizer.step()
@@ -129,12 +122,13 @@ class ObjDataset(Dataset):
 
 def ae_forward(enc, dec, ims_tensor):
     latent = 1 - torch.exp(-enc(ims_tensor))
-    samples = gumbel_softmax_sample(
-        logits=latent.permute(0, 2, 3, 1),
-        temperature=0.1,
-    ).permute(0, 3, 1, 2)
-    reconstr = dec(samples)
-    # reconstr = dec(latent)
+    #samples = gumbel_softmax_sample(
+    #    logits=latent.permute(0, 2, 3, 1),
+    #    temperature=0.1,
+    #).permute(0, 3, 1, 2)
+    samples = latent
+    #reconstr = dec(samples)
+    reconstr = dec(latent)
     return latent, samples, reconstr
 
 def validate_model(logdir, epoch, val_dataloader, n_validation_samples, model_forward, params, device):
