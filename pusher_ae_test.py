@@ -16,7 +16,7 @@ import cv2
 
 from encoder import Encoder
 from decoder import Decoder
-from gumbel_softmax import gumbel_softmax_sample
+from gumbel_softmax import *
 
 import time
 from tqdm import tqdm
@@ -44,24 +44,25 @@ def test_autoencoder():
     train_dataloader = DataLoader(train_dataset, batch_size=mb_size, shuffle=True, num_workers=8)
     val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=True, num_workers=1)
 
-    enc = Encoder([3,96,96,4], [0,0,0,4], 4).to(device)
-    dec = Decoder([9,36,36,3], 4).to(device)
+    enc = Encoder([3,96,96,8], [0,0,0,8], 8).to(device)
+    dec = Decoder([9,36,36,3], 8).to(device)
     params = {}
     for (k, v) in enc.named_parameters():
         params['enc.'+k.replace('__', '.')] = v
     for (k, v) in dec.named_parameters():
         params['dec.'+k.replace('__', '.')] = v
-    saved_weights = pickle.load(open('data/pusher_ae_kl_100_04-12-2018_02-34/9/params.pkl', 'rb'))
+    #saved_weights = pickle.load(open('data/pusher_ae_kl_1000000_05-12-2018_17-04/0/params.pkl', 'rb'))
+    saved_weights = pickle.load(open('data/pusher_ae_kl_3000_05-12-2018_22-57/2/params.pkl', 'rb'))
     for (k,v) in saved_weights.items():
         params[k].data = torch.from_numpy(v).to(device)
     optimizer = optim.Adam(params.values(), lr=learning_rate)
 
     #prior = np.array([(64*64-2)/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
-    prior = np.array([(64*64-3)/(64*64.), 1/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
-    prior = np.reshape(prior, [1, -1, 1, 1])
-    prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
+    #prior = np.array([(64*64-3)/(64*64.), 1/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
+    #prior = np.reshape(prior, [1, -1, 1, 1])
+    #prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
 
-    logdir = 'pusher_ae_kl_1000_' + time.strftime("%d-%m-%Y_%H-%M")
+    logdir = 'pusher_ae_kl__3_' + time.strftime("%d-%m-%Y_%H-%M")
     n_validation_samples = 5
     eps = 1e-20
     enc.train()
@@ -74,13 +75,13 @@ def test_autoencoder():
             latent, samples, reconstr = model_forward(ims_tensor)
 
             optimizer.zero_grad()
-            kl_loss = torch.mean(
-                latent * (torch.log(latent+eps) - torch.log(prior+eps)),
-            )
+            sampled_beta = torch.mean(samples)
+            # kl_loss = torch.mean(torch.log(sampled_beta) + (1/64*64)/sampled_beta)
+            kl_loss = (sampled_beta - 1/(64*64))**2
             reconstr_loss = torch.mean(
                 (ims_tensor - reconstr)**2
             )
-            kl_weight = (epoch+1) / 1000.
+            kl_weight = (epoch+1)*3
             loss = kl_weight*kl_loss + reconstr_weight*reconstr_loss
             loss.backward()
             optimizer.step()
@@ -115,13 +116,13 @@ class ObjDataset(Dataset):
         return new_im
 
 def ae_forward(enc, dec, ims_tensor):
-    latent = enc(ims_tensor)
-    samples = gumbel_softmax_sample(
+    latent = 1 - torch.exp(-enc(ims_tensor))
+    #samples = latent
+    samples = binary_gumbel_softmax_sample(
         logits=latent.permute(0, 2, 3, 1),
         temperature=0.1,
     ).permute(0, 3, 1, 2)
     reconstr = dec(samples)
-    # reconstr = dec(latent)
     return latent, samples, reconstr
 
 def validate_model(logdir, epoch, val_dataloader, n_validation_samples, model_forward, params, device):
