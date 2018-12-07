@@ -62,6 +62,7 @@ class Encoder(nn.Module):
         )
 
     def forward(self, x):
+        import time
         self.layers = [x]
         self.feats = []
         for i in range(len(self.channels)-1):
