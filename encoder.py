@@ -7,7 +7,6 @@ import torch.optim as optim
 
 class Encoder(nn.Module):
     def __init__(self, channels=[3, 16, 16, 2], scale_feats=[0, 0, 0, 2], obj_classes=2, n_reps=[1, 1, 1]):
-        # num_obj_classes includes background class
         assert len(channels) == len(scale_feats), \
             'length of list of per-scale features must match length of list of channels'
         assert channels[-1] == scale_feats[-1], \
@@ -62,7 +61,6 @@ class Encoder(nn.Module):
         )
 
     def forward(self, x):
-        import time
         self.layers = [x]
         self.feats = []
         for i in range(len(self.channels)-1):

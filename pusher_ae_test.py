@@ -25,7 +25,7 @@ import pickle
 def test_autoencoder():
     kl_weight = 1.0
     reconstr_weight = 1.0
-    learning_rate = 0.01
+    learning_rate = 0.001
     mb_size = 64
 
     use_cuda = torch.cuda.is_available()
@@ -35,8 +35,8 @@ def test_autoencoder():
 
     data = h5py.File('data/obj_balls.h5', 'r')
     print('extracting datasets to numpy...')
-    train_data = pickle.load(open('data/black_wtarget.pkl', 'rb'))[:450].reshape(450*50, 1, 64, 64, 3)
-    val_data = pickle.load(open('data/black_wtarget.pkl', 'rb'))[450:].reshape(50*50, 1, 64, 64, 3)
+    train_data = pickle.load(open('data/pusher_relabled.pkl', 'rb'))[:450].reshape(450*50, 1, 64, 64, 3).astype(np.float32)
+    val_data = pickle.load(open('data/pusher_relabled.pkl', 'rb'))[450:].reshape(50*50, 1, 64, 64, 3).astype(np.float32)
     print('done!')
 
     train_dataset = ObjDataset(train_data, device)
@@ -45,43 +45,54 @@ def test_autoencoder():
     val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=True, num_workers=1)
 
     enc = Encoder([3,96,96,8], [0,0,0,8], 8).to(device)
-    dec = Decoder([9,36,36,3], 8).to(device)
+    dec = Decoder([9,96,96,3], 8).to(device)
     params = {}
     for (k, v) in enc.named_parameters():
         params['enc.'+k.replace('__', '.')] = v
     for (k, v) in dec.named_parameters():
         params['dec.'+k.replace('__', '.')] = v
-    #saved_weights = pickle.load(open('data/pusher_ae_kl_1000000_05-12-2018_17-04/0/params.pkl', 'rb'))
-    saved_weights = pickle.load(open('data/pusher_ae_kl_3000_05-12-2018_22-57/2/params.pkl', 'rb'))
-    for (k,v) in saved_weights.items():
-        params[k].data = torch.from_numpy(v).to(device)
     optimizer = optim.Adam(params.values(), lr=learning_rate)
+    #enc_optimizer = optim.Adam([v for (k, v) in params.items() if k.startswith('enc')], lr=0.0001)
+    #dec_optimizer = optim.Adam([v for (k, v) in params.items() if k.startswith('dec')], lr=learning_rate)
 
     #prior = np.array([(64*64-2)/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
     #prior = np.array([(64*64-3)/(64*64.), 1/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
     #prior = np.reshape(prior, [1, -1, 1, 1])
     #prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
 
-    logdir = 'pusher_ae_kl__3_' + time.strftime("%d-%m-%Y_%H-%M")
+    logdir = 'pusher2_ae_kl__100000_' + time.strftime("%d-%m-%Y_%H-%M")
     n_validation_samples = 5
     eps = 1e-20
     enc.train()
     dec.train()
     model_forward = lambda ims_tensor: ae_forward(enc, dec, ims_tensor)
+    #'data/pusher_ae_kl_1000000_05-12-2018_17-04/0/params.pkl'
+    #'data/pusher_ae_kl_3000_05-12-2018_22-57/2/params.pkl' #old sparse
+    #'data/pusher2_ae_kl_10_08-12-2018_10-44/9/params.pkl' #ae
+    #'data/pusher2_ae_kl_10_08-12-2018_11-02/9/params.pkl' #sparse
+    #'data/pusher2_ae_kl__1000_09-12-2018_00-54/5/params.pkl' #sparse only 1
+    #'data/pusher2_ae_kl_0_09-12-2018_09-53/9/params.pkl' #lin dec
+    #'data/pusher2_ae_kl__10000_09-12-2018_10-38/9/params.pkl' #sparse lin dec
+    params = init_weights(
+        params, file='data/pusher2_ae_kl__10000_09-12-2018_10-38/9/params.pkl',
+        dataloader=train_dataloader, device=device
+    )
     for epoch in range(10): #10 #30
         for (train_ind, rollout) in tqdm(enumerate(train_dataloader)):
+            if train_ind >= 100:
+                break
             rollout = rollout.to(device)
             ims_tensor = rollout.reshape(-1, 3, 64, 64)
             latent, samples, reconstr = model_forward(ims_tensor)
 
             optimizer.zero_grad()
-            sampled_beta = torch.mean(samples)
-            # kl_loss = torch.mean(torch.log(sampled_beta) + (1/64*64)/sampled_beta)
-            kl_loss = (sampled_beta - 1/(64*64))**2
+            sampled_beta = torch.sum(samples, dim=[0,2,3]) / samples.shape[0] / 64 / 64
+            #sampled_beta = torch.mean(samples)
+            kl_loss = torch.mean((sampled_beta - 1/(64*64))**2)
             reconstr_loss = torch.mean(
                 (ims_tensor - reconstr)**2
             )
-            kl_weight = (epoch+1)*3
+            kl_weight = (epoch+1) * 100000
             loss = kl_weight*kl_loss + reconstr_weight*reconstr_loss
             loss.backward()
             optimizer.step()
@@ -91,6 +102,18 @@ def test_autoencoder():
 
     print(epoch, kl_weight*kl_loss.detach().cpu().numpy(), reconstr_weight*reconstr_loss.detach().cpu().numpy())
     validate_model(logdir, epoch, val_dataloader, n_validation_samples, model_forward, params, device)
+
+def init_weights(params, file=None, dataloader=None, device=None):
+    if file is not None:
+        saved_weights = pickle.load(open(file, 'rb'))
+        for (k, v) in saved_weights.items():
+            params[k].data = torch.from_numpy(v).to(device)
+        return params
+    else:
+        for (k, v) in params.items():
+            if k.endswith('weight'):
+                nn.init.xavier_uniform_(v, gain=nn.init.calculate_gain('relu'))
+        return params
 
 class ObjDataset(Dataset):
     def __init__(self, data, device):
