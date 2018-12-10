@@ -25,7 +25,7 @@ import pickle
 def test_autoencoder():
     kl_weight = 1.0
     reconstr_weight = 1.0
-    learning_rate = 0.01
+    learning_rate = 0.001
     mb_size = 64
 
     use_cuda = torch.cuda.is_available()
@@ -33,47 +33,35 @@ def test_autoencoder():
     np.random.seed(0)
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    data = h5py.File('data/obj_balls.h5', 'r')
-    print('extracting datasets to numpy...')
-    train_data = data['training']['groups'][:1,:].transpose([1,0,2,3,4])
-    val_data = data['validation']['groups'][:1,:].transpose([1,0,2,3,4])
-    print('done!')
+    train_data = pickle.load(open('data/multiagent_relabeled.pkl', 'rb'))[:450].reshape(450*50, 1, 64, 64, 3).astype(np.float32)
+    val_data = pickle.load(open('data/multiagent_relabeled.pkl', 'rb'))[450:].reshape(50*50, 1, 64, 64, 3).astype(np.float32)
 
     train_dataset = ObjDataset(train_data, device)
     val_dataset = ObjDataset(val_data, device)
     train_dataloader = DataLoader(train_dataset, batch_size=mb_size, shuffle=True, num_workers=8)
     val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=True, num_workers=1)
 
-    enc = Encoder([3,96,96,8], [0,0,0,8], 8, [1,1,1]).to(device)
-    dec = Decoder([9,96,96,96,3], 8, [1,1,1,1]).to(device)
+    enc = Encoder([3,96,8], [0,0,8], 8).to(device)
+    dec = Decoder([9,96,3], 8).to(device)
     params = {}
     for (k, v) in enc.named_parameters():
         params['enc.'+k.replace('__', '.')] = v
     for (k, v) in dec.named_parameters():
         params['dec.'+k.replace('__', '.')] = v
-    #saved_weights = pickle.load(open('data/ae_relu_kl_1000000_05-12-2018_16-45/0/params.pkl', 'rb'))
-    #saved_weights = pickle.load(open('data/ae_relu_kl_3_05-12-2018_17-09/1/params.pkl', 'rb')) #ae
-    #saved_weights = pickle.load(open('data/ae_relu_kl_1_06-12-2018_23-03/0/params.pkl', 'rb')) #sparse
-    #saved_weights = pickle.load(open('data/ae_relu_kl_1_07-12-2018_20-26/9/params.pkl', 'rb')) #new dec
-    #saved_weights = pickle.load(open('data/ae_relu_kl_3_07-12-2018_20-50/9/params.pkl', 'rb')) #new dec sparse
-    #saved_weights = pickle.load(open('data/ae_relu_kl__100_08-12-2018_01-33/9/params.pkl', 'rb')) #new big dec sparse
-    saved_weights = pickle.load(open('data/ae_relu_kl__10000_08-12-2018_03-29/9/params.pkl', 'rb')) #new big dec sparser
-    for (k, v) in saved_weights.items():
-        params[k].data = torch.from_numpy(v).to(device)
     optimizer = optim.Adam(params.values(), lr=learning_rate)
 
-    #prior = np.array([(64*64-2)/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
-    #prior = np.array([1/(64*64.), (64*64-2)/(64*64.), 1/(64*64.)]).astype(np.float32)
-    #prior = np.array([(64*64-3)/(64*64.), 1/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
-    #prior = np.reshape(prior, [1, -1, 1, 1])
-    #prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
-
-    logdir = 'ae_relu_kl__300000f_' + time.strftime("%d-%m-%Y_%H-%M")
+    logdir = 'multiagent_ae_kl__100000_' + time.strftime("%d-%m-%Y_%H-%M")
     n_validation_samples = 5
     eps = 1e-20
     enc.train()
     dec.train()
     model_forward = lambda ims_tensor: ae_forward(enc, dec, ims_tensor)
+    #data/multiagent_ae_kl_0_10-12-2018_00-15/4/params.pkl #ae
+    #data/multiagent_ae_kl__200000_10-12-2018_01-32/3/params.pkl #sparse
+    params = init_weights(
+        params, file='data/multiagent_ae_kl__200000_10-12-2018_01-32/3/params.pkl',
+        dataloader=train_dataloader, device=device
+    )
     for epoch in range(10): #10 #30
         for (train_ind, rollout) in tqdm(enumerate(train_dataloader)):
             if train_ind >= 100:
@@ -83,15 +71,14 @@ def test_autoencoder():
             latent, samples, reconstr = model_forward(ims_tensor)
 
             optimizer.zero_grad()
+            #sampled_beta = torch.sum(samples, dim=[0,2,3]) / samples.shape[0] / 64 / 64
+            #kl_loss = torch.mean((sampled_beta - 1/(64*64))**2)
             sampled_beta = torch.mean(samples)
-            # kl_loss = torch.mean(torch.log(sampled_beta) + (1/64*64)/sampled_beta)
-            kl_loss = (sampled_beta - 1/(64*64))**2
-            #kl_loss = torch.abs(sampled_beta - 1/(64*64))
+            kl_loss = torch.mean((sampled_beta - 1/(64*64*8))**2)
             reconstr_loss = torch.mean(
                 (ims_tensor - reconstr)**2
             )
-            #kl_weight = (epoch+1) * 100000
-            kl_weight = 300000
+            kl_weight = (epoch+1) * 100000
             loss = kl_weight*kl_loss + reconstr_weight*reconstr_loss
             loss.backward()
             optimizer.step()
@@ -101,6 +88,18 @@ def test_autoencoder():
 
     print(epoch, kl_weight*kl_loss.detach().cpu().numpy(), reconstr_weight*reconstr_loss.detach().cpu().numpy())
     validate_model(logdir, epoch, val_dataloader, n_validation_samples, model_forward, params, device)
+
+def init_weights(params, file=None, dataloader=None, device=None):
+    if file is not None:
+        saved_weights = pickle.load(open(file, 'rb'))
+        for (k, v) in saved_weights.items():
+            params[k].data = torch.from_numpy(v).to(device)
+        return params
+    else:
+        for (k, v) in params.items():
+            if k.endswith('weight'):
+                nn.init.xavier_uniform_(v, gain=nn.init.calculate_gain('relu'))
+        return params
 
 class ObjDataset(Dataset):
     def __init__(self, data, device):
@@ -122,11 +121,7 @@ class ObjDataset(Dataset):
         return tensor_rollout
 
     def _preprocess_im(self, im):
-        new_im = np.zeros((64, 64, 3), dtype=np.float32)
-        group1_locs = np.where(im == 1)
-        new_im[group1_locs[0], group1_locs[1], np.ones_like(group1_locs[2])] = 1.
-        group2_locs = np.where(im == 2)
-        new_im[group2_locs[0], group2_locs[1], 2*np.ones_like(group2_locs[2])] = 1.
+        new_im = im / np.max(im)
         return new_im
 
 def ae_forward(enc, dec, ims_tensor):
@@ -158,9 +153,7 @@ def validate_model(logdir, epoch, val_dataloader, n_validation_samples, model_fo
         latent, samples, reconstr = model_forward(ims_tensor)
 
         latent_im = (latent.detach().cpu().numpy()[0, :]).transpose([1, 2, 0])
-        latent_im = np.concatenate((np.zeros_like(latent_im[:,:,:1]), latent_im), axis=2)
         samples_im = (samples.detach().cpu().numpy()[0, :]).transpose([1, 2, 0])
-        samples_im = np.concatenate((np.zeros_like(samples_im[:,:,:1]), samples_im), axis=2)
         input_im = (ims_tensor.detach().cpu().numpy()[0, :]).transpose([1, 2, 0])
         reconstr_im = (reconstr.detach().cpu().numpy()[0, :]).transpose([1, 2, 0])
         pickle.dump(latent_im, open('data/{}/{}/latent_{}.pkl'.format(logdir, epoch, val_ind), 'wb'))

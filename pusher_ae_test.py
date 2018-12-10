@@ -33,11 +33,8 @@ def test_autoencoder():
     np.random.seed(0)
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    data = h5py.File('data/obj_balls.h5', 'r')
-    print('extracting datasets to numpy...')
-    train_data = pickle.load(open('data/pusher_relabled.pkl', 'rb'))[:450].reshape(450*50, 1, 64, 64, 3).astype(np.float32)
-    val_data = pickle.load(open('data/pusher_relabled.pkl', 'rb'))[450:].reshape(50*50, 1, 64, 64, 3).astype(np.float32)
-    print('done!')
+    train_data = pickle.load(open('data/pusher_relabeled.pkl', 'rb'))[:450].reshape(450*50, 1, 64, 64, 3).astype(np.float32)
+    val_data = pickle.load(open('data/pusher_relabeled.pkl', 'rb'))[450:].reshape(50*50, 1, 64, 64, 3).astype(np.float32)
 
     train_dataset = ObjDataset(train_data, device)
     val_dataset = ObjDataset(val_data, device)
@@ -66,11 +63,6 @@ def test_autoencoder():
     enc.train()
     dec.train()
     model_forward = lambda ims_tensor: ae_forward(enc, dec, ims_tensor)
-    #'data/pusher_ae_kl_1000000_05-12-2018_17-04/0/params.pkl'
-    #'data/pusher_ae_kl_3000_05-12-2018_22-57/2/params.pkl' #old sparse
-    #'data/pusher2_ae_kl_10_08-12-2018_10-44/9/params.pkl' #ae
-    #'data/pusher2_ae_kl_10_08-12-2018_11-02/9/params.pkl' #sparse
-    #'data/pusher2_ae_kl__1000_09-12-2018_00-54/5/params.pkl' #sparse only 1
     #'data/pusher2_ae_kl_0_09-12-2018_09-53/9/params.pkl' #lin dec
     #'data/pusher2_ae_kl__10000_09-12-2018_10-38/9/params.pkl' #sparse lin dec
     params = init_weights(
