@@ -1,7 +1,6 @@
 import pickle; import numpy as np; import cv2
-#im = pickle.load(open('data/multiagent_ae_kl__1000_09-12-2018_23-43/9/latent_2.pkl', 'rb'))
-im = pickle.load(open('data/multiagent_ae_kl__200000_10-12-2018_01-32/3/latent_2.pkl', 'rb'))
-#im = pickle.load(open('data/pusher2_ae_kl__10000_09-12-2018_10-38/9/latent_0.pkl', 'rb'))
+#im = pickle.load(open('data/multiagent_ae_kl__200000_10-12-2018_01-32/3/latent_2.pkl', 'rb'))
+#im = pickle.load(open('data/pusher2_ae_kl__10000_10-12-2018_01-54/6/latent_0.pkl', 'rb'))
 new_im = np.zeros((64, 64, 3), dtype=np.uint8)
 num_active_layers = 0
 for i in range(8):

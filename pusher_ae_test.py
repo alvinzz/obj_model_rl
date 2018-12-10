@@ -49,24 +49,17 @@ def test_autoencoder():
     for (k, v) in dec.named_parameters():
         params['dec.'+k.replace('__', '.')] = v
     optimizer = optim.Adam(params.values(), lr=learning_rate)
-    #enc_optimizer = optim.Adam([v for (k, v) in params.items() if k.startswith('enc')], lr=0.0001)
-    #dec_optimizer = optim.Adam([v for (k, v) in params.items() if k.startswith('dec')], lr=learning_rate)
 
-    #prior = np.array([(64*64-2)/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
-    #prior = np.array([(64*64-3)/(64*64.), 1/(64*64.), 1/(64*64.), 1/(64*64.)]).astype(np.float32)
-    #prior = np.reshape(prior, [1, -1, 1, 1])
-    #prior = torch.tensor(np.tile(prior, [1, 1, 64, 64]), device=device)
-
-    logdir = 'pusher2_ae_kl__100000_' + time.strftime("%d-%m-%Y_%H-%M")
+    logdir = 'pusher2_ae_kl__10000_' + time.strftime("%d-%m-%Y_%H-%M")
     n_validation_samples = 5
     eps = 1e-20
     enc.train()
     dec.train()
     model_forward = lambda ims_tensor: ae_forward(enc, dec, ims_tensor)
     #'data/pusher2_ae_kl_0_09-12-2018_09-53/9/params.pkl' #lin dec
-    #'data/pusher2_ae_kl__10000_09-12-2018_10-38/9/params.pkl' #sparse lin dec
+    #'data/pusher2_ae_kl__10000_10-12-2018_01-54/6/params.pkl' #sparse lin dec
     params = init_weights(
-        params, file='data/pusher2_ae_kl__10000_09-12-2018_10-38/9/params.pkl',
+        params, file='data/pusher2_ae_kl__10000_10-12-2018_01-54/6/params.pkl',
         dataloader=train_dataloader, device=device
     )
     for epoch in range(10): #10 #30
@@ -78,13 +71,14 @@ def test_autoencoder():
             latent, samples, reconstr = model_forward(ims_tensor)
 
             optimizer.zero_grad()
-            sampled_beta = torch.sum(samples, dim=[0,2,3]) / samples.shape[0] / 64 / 64
-            #sampled_beta = torch.mean(samples)
-            kl_loss = torch.mean((sampled_beta - 1/(64*64))**2)
+            #sampled_beta = torch.sum(samples, dim=[0,2,3]) / samples.shape[0] / 64 / 64
+            #kl_loss = torch.mean((sampled_beta - 1/(64*64))**2)
+            sampled_beta = torch.mean(samples)
+            kl_loss = torch.mean((sampled_beta - 1/(64*64*8))**2)
             reconstr_loss = torch.mean(
                 (ims_tensor - reconstr)**2
             )
-            kl_weight = (epoch+1) * 100000
+            kl_weight = (epoch+1) * 10000
             loss = kl_weight*kl_loss + reconstr_weight*reconstr_loss
             loss.backward()
             optimizer.step()
