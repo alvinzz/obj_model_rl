@@ -32,8 +32,12 @@ class PusherEnv(MujocoEnv, Serializable):
 
     def relabeled_current_obs(self):
         img = self.get_current_obs().reshape(64, 64, 3)
+        #block_locs = np.where((img[:,:,0] > img[:,:,1]) & (img[:,:,0] > 0))
+        #img[block_locs] = [0,0,160]
         pusher_locs = np.where((img[:,:,0] == img[:,:,1]) & (img[:,:,0] > 0))
         img[pusher_locs] = [160,0,0]
+        #target_locs = np.where((img[:,:,0] < img[:,:,1]) & (img[:,:,1] > 0))
+        #img[target_locs] = [0,160,0]
         return img.flatten()
 
     def get_state(self):
@@ -98,16 +102,17 @@ class MultiPointmassEnv(MujocoEnv, Serializable):
         return img.flatten()
 
     def relabeled_current_obs(self):
-        img = self.get_current_obs().reshape(64, 64, 3)
-        background_locs = np.where((img[:,:,0] == img[:,:,1]) & (img[:,:,0] == img[:,:,2]) & (img[:,:,0] > 0))
+        img = self.get_current_obs().reshape(64, 64, 3).astype(np.uint8)
+        background_locs = np.where((np.abs(img[:,:,0]-img[:,:,1]) <= 5) \
+            & np.abs((img[:,:,0]-img[:,:,2]) <= 5))
         img[background_locs] = [0,0,0]
-        yellow_locs = np.where((img[:,:,0] == img[:,:,1]) & (img[:,:,0] > 0))
-        img[yellow_locs] = [255,0,0]
-        green_locs = np.where((img[:,:,0] < img[:,:,1]))
-        img[green_locs] = [0,255,0]
-        blue_locs = np.where((img[:,:,2] > img[:,:,1]))
+        blue_locs = np.where((img[:,:,0] > img[:,:,1]) & (img[:,:,0] > img[:,:,2]))
         img[blue_locs] = [0,0,255]
-        return img.flatten()
+        green_locs = np.where((img[:,:,1] > img[:,:,2]) & (img[:,:,1] > img[:,:,0]))
+        img[green_locs] = [0,255,0]
+        yellow_locs = np.where((img[:,:,2] == img[:,:,1]) & (img[:,:,1] > 0))
+        img[yellow_locs] = [255,0,0]
+        return img.flatten().astype(np.float32)
 
     def step(self, action):
         self.forward_dynamics(action)
@@ -136,13 +141,20 @@ class MultiPointmassEnv(MujocoEnv, Serializable):
 
 if __name__ == "__main__":
     env = MultiPointmassEnv()
+    #env = PusherEnv()
     #env = ImageMujocoEnv(env)
     hello = env.reset()
     print(hello.shape)
     # print("reset pusher: ", env.get_body_com("pusherObj"))
     # print("reset object: ", env.get_body_com("obj1"))
     for i in range(20):
-        observation, reward, done, info = env.step(np.array([1,0]))
+        observation, reward, done, info = env.step(np.array([1,1,-1,-1]))
+        #observation, reward, done, info = env.step(np.array([1,0]))
+        im = env.relabeled_current_obs()
+        import cv2
+        cv2.imshow('im', im.reshape(64, 64, 3).astype(np.uint8)[:,:,[2,1,0]])
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
         print(observation.shape)
     env.reset()
     # print("reset pusher?: ", env.get_body_com("pusherObj"))
