@@ -24,6 +24,7 @@ if __name__ == '__main__':
     #prev_obj_locs = [torch.Tensor([[5,5],[4,4]]),torch.Tensor([[1,1],[2,2],[3,3]])]
     #preds = interact.forward(obj_locs, prev_obj_locs)
     #print(preds)
+    #print(1/0)
 
     def disp(cur, prev, pred):
         cur = cur[0].detach().cpu().numpy().flatten().astype(np.int32)
@@ -44,7 +45,7 @@ if __name__ == '__main__':
         cv2.destroyAllWindows()
 
     n_classes = 1
-    dyn_model = PairwiseInteract(get_force_layer_sizes=[2*1, 50, 50, 50, 20], apply_force_layer_sizes=[20, 50, 1], n_classes=n_classes)
+    dyn_model = PairwiseInteract(get_force_layer_sizes=[2*1, 100, 100, 2], apply_force_layer_sizes=[2+1, 100, 100, 1], n_classes=n_classes)
     for (name, param) in dyn_model.named_parameters():
         if name.endswith('weight'):
             nn.init.xavier_uniform_(param, gain=nn.init.calculate_gain('relu'))
@@ -79,7 +80,7 @@ if __name__ == '__main__':
 
         pred = dyn_model.forward(cur, prev)
 
-        loss = torch.mean((rnn_utils.pad_sequence(pred)-rnn_utils.pad_sequence(targ))**2)
+        loss = torch.mean(torch.abs(rnn_utils.pad_sequence(pred)-rnn_utils.pad_sequence(targ)))
 
         optimizer.zero_grad()
         loss.backward()

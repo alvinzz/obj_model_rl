@@ -32,7 +32,7 @@ if __name__ == '__main__':
                 cur = [k.cpu().type(torch.FloatTensor) for k in cur]
                 targ = [k.cpu().type(torch.FloatTensor) for k in targ]
                 pred = dyn_model.forward(cur, prev)
-                loss = torch.mean((rnn_utils.pad_sequence(pred)-rnn_utils.pad_sequence(targ))**2)
+                loss = torch.mean(torch.abs(rnn_utils.pad_sequence(pred)-rnn_utils.pad_sequence(targ)))
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -40,6 +40,6 @@ if __name__ == '__main__':
                 tot_loss += loss.detach().cpu().numpy()
         if epoch % 1 == 0:
             params = {k: v.data.cpu().numpy() for (k, v) in dyn_model.named_parameters()}
-            pickle.dump(params, open('data/occusion_dyn_model.pkl', 'wb'))
+            pickle.dump(params, open('data/occlusion_dyn_model.pkl', 'wb'))
             print(tot_loss / dataset_len)
     print(tot_loss / dataset_len)

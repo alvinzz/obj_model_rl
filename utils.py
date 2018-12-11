@@ -15,9 +15,9 @@ def threshold_latent(latent, prev_latent=None, max_obj_size=3):
         for (ch_idx, channel) in enumerate(latent):
             channel_locs = torch.nonzero(channel > eps)
             #TODO
-            if ch_idx == 1:
-                _, max_loc = channel.reshape(-1).max(0)
-                channel_locs = torch.Tensor([[max_loc // latent[1].shape[0], torch.remainder(max_loc, latent[1].shape[0])]]).type(torch.LongTensor).to(device)
+            #if ch_idx == 1:
+            #    _, max_loc = channel.reshape(-1).max(0)
+            #    channel_locs = torch.Tensor([[max_loc // latent[1].shape[0], torch.remainder(max_loc, latent[1].shape[0])]]).type(torch.LongTensor).to(device)
             sorted_channel_locs = sort_merge_channel_locs(channel_locs, latent, max_obj_size)
             locs.append(sorted_channel_locs)
         return locs
@@ -28,11 +28,11 @@ def threshold_latent(latent, prev_latent=None, max_obj_size=3):
             channel_locs = torch.nonzero(channel > eps)
             sorted_channel_locs = sort_merge_channel_locs(channel_locs, latent, max_obj_size)
             #TODO
-            if ch_idx == 1:
-                _, max_loc = channel.reshape(-1).max(0)
-                sorted_channel_locs = torch.Tensor([[max_loc // latent[1].shape[0], torch.remainder(max_loc, latent[1].shape[0])]]).type(torch.LongTensor).to(device)
-                _, max_loc = prev_latent[ch_idx].reshape(-1).max(0)
-                prev_channel_locs = torch.Tensor([[max_loc // latent[1].shape[0], torch.remainder(max_loc, latent[1].shape[0])]]).type(torch.LongTensor).to(device)
+            #if ch_idx == 1:
+            #    _, max_loc = channel.reshape(-1).max(0)
+            #    sorted_channel_locs = torch.Tensor([[max_loc // latent[1].shape[0], torch.remainder(max_loc, latent[1].shape[0])]]).type(torch.LongTensor).to(device)
+            #    _, max_loc = prev_latent[ch_idx].reshape(-1).max(0)
+            #    prev_channel_locs = torch.Tensor([[max_loc // latent[1].shape[0], torch.remainder(max_loc, latent[1].shape[0])]]).type(torch.LongTensor).to(device)
             if len(prev_channel_locs) != len(sorted_channel_locs):
                 return None
             corr_channel_locs = []
