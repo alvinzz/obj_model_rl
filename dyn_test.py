@@ -6,101 +6,81 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
+import itertools
+import torch.nn.utils.rnn as rnn_utils
+from dyn_model import PairwiseInteract
+
 use_cuda = torch.cuda.is_available()
 
-class MLP(nn.Module):
-    def __init__(self, layer_sizes=[1, 100, 100, 100, 2]):
-        # num_obj_classes includes background class
-        super(MLP, self).__init__()
-        self.layers = []
-        for i in range(len(layer_sizes)-1):
-            self.layers.append(nn.Linear(layer_sizes[i], layer_sizes[i+1]))
-            self.add_module('layer_{}'.format(i), self.layers[i])
+if __name__ == '__main__':
+    #interact = PairwiseInteract(n_classes=2)
+    #obj_locs = [torch.Tensor([[5],[4]]),torch.Tensor([[1],[2],[3]])]
+    #prev_obj_locs = [torch.Tensor([[5],[4]]),torch.Tensor([[1],[2],[3]])]
+    #preds = interact.forward(obj_locs, prev_obj_locs)
+    #print(preds)
 
-    def forward(self, x):
-        for i in range(len(self.layers) - 1):
-            x = F.leaky_relu(self.layers[i](x))
-        x = self.layers[-1](x)
-        return x
-
-mb_size = 1000
-grid_size = 20 #100
-max_shift = 2
-force_size = 25
-device = torch.device("cuda" if use_cuda else "cpu")
-
-prev_force_model = MLP([2, 100, 100, force_size]).to(device)
-render_model = MLP([force_size, 250, 250, (2*max_shift+1)**2]).to(device)
-params = list(prev_force_model.parameters()) + list(render_model.parameters())
-for p in params:
-    try:
-        nn.init.xavier_uniform_(p, gain=nn.init.calculate_gain('relu'))
-    except:
-        pass
-optimizer = optim.Adam(params, lr=0.001)
-prev_force_model.train()
-render_model.train()
-
-diff_combs = np.dstack(np.meshgrid(np.arange(grid_size), np.arange(grid_size))).reshape(-1, 2)
-diff_combs = np.stack((diff_combs[:, 1], diff_combs[:, 0]), axis=1)
-import itertools
-diff_combs = np.array(list(itertools.product(diff_combs, diff_combs)))
-diff_combs = diff_combs[:,1,:] - diff_combs[:,0,:]
-diff_combs = torch.Tensor(diff_combs).to(device)
-
-def reflect_ind(ind, lower, upper):
-    if ind < lower:
-        return lower + (lower - ind)
-    if ind > upper:
-        return upper - (ind - upper)
-    return ind
-reflect_ind = np.vectorize(reflect_ind)
-
-for itr in range(10000000):
-    inds = np.random.randint(2*max_shift, grid_size-1-2*max_shift, size=(mb_size, 2), dtype=np.uint8)
-    shifts = np.random.randint(-max_shift, max_shift+1, size=(mb_size, 2), dtype=np.int8)
-    
-    prev = np.zeros((mb_size, grid_size, grid_size))
-    cur = np.zeros((mb_size, grid_size, grid_size))
-    targ = np.zeros((mb_size, grid_size, grid_size))
-    
-    prev[np.arange(mb_size), inds[:,0], inds[:,1]] = 1
-    cur[np.arange(mb_size), inds[:,0]+shifts[:,0], inds[:,1]+shifts[:,1]] = 1
-    targ[np.arange(mb_size), inds[:,0]+2*shifts[:,0], inds[:,1]+2*shifts[:,1]] = 1
-    
-    prev = Variable(torch.Tensor(prev), requires_grad=True).to(device)
-    cur = Variable(torch.Tensor(cur), requires_grad=True).to(device)
-    targ = Variable(torch.Tensor(targ), requires_grad=False).to(device)
-    
-    prev_forces = prev_force_model(diff_combs.type(torch.FloatTensor).to(device))
-    render = []
-    for mb_ind in range(mb_size):
-        cur_locs = cur[mb_ind].nonzero()
-        prev_locs = prev[mb_ind].nonzero()
-        render_mb = torch.zeros((grid_size+2*max_shift, grid_size+2*max_shift), dtype=torch.float32).to(device)
-        for cur_loc in cur_locs:
-            force_on_cur_loc = torch.zeros(force_size).type(torch.FloatTensor).to(device)
-            for prev_loc in prev_locs:
-                force = prev_forces[prev_loc[0]*1000 + prev_loc[1]*100 + cur_loc[0]*10 + cur_loc[1]]
-                force_on_cur_loc += force
-            shift_pred = render_model(force_on_cur_loc).reshape(2*max_shift+1, 2*max_shift+1)
-            render_mb[cur_loc[0]+max_shift-max_shift:cur_loc[0]+max_shift+max_shift+1, cur_loc[1]+max_shift-max_shift:cur_loc[1]+max_shift+max_shift+1] += shift_pred
-        render.append(render_mb)
-    render = torch.stack(render, dim=0)
-    render = render[:, max_shift:max_shift+grid_size, max_shift:max_shift+grid_size]
-    
-    optimizer.zero_grad()
-    loss = 100*torch.mean(
-        (render - targ)**2,
-    )
-    loss.backward()
-    optimizer.step()
-    
-    if itr % 100 == 0:
-#        print(loss, prev[0], cur[0], torch.round(render[0]))
-        print(loss)
-    if itr % 1000 == 0:
+    def disp(cur, prev, pred):
+        cur = cur[0].detach().cpu().numpy().flatten().astype(np.int32)
+        prev = prev[0].detach().cpu().numpy().flatten().astype(np.int32)
+        pred = np.round(pred[0].detach().cpu().numpy().flatten()).astype(np.int32)
         import cv2
-        cv2.imwrite('preds{}.jpg'.format(itr), (255*np.stack([prev[0].detach().cpu().numpy(), cur[0].detach().cpu().numpy(), render[0].detach().cpu().numpy()], axis=2)).astype(np.uint8))
-        cv2.imwrite('targ{}.jpg'.format(itr), (255*np.stack([prev[0].detach().cpu().numpy(), cur[0].detach().cpu().numpy(), targ[0].detach().cpu().numpy()], axis=2)).astype(np.uint8))
-print(loss)
+        im = np.zeros((3, 5), dtype=np.float32)
+        for i in range(len(cur)):
+            im[0, prev[i]] = (1+i)/len(cur)
+            im[1, cur[i]] = (1+i)/len(cur)
+            try:
+                im[2, pred[i]] = (1+i)/len(cur)
+            except:
+                pass
+        im = cv2.resize(im, (0,0), fx=10, fy=10)
+        cv2.imshow('im', im)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    n_classes = 1
+    dyn_model = PairwiseInteract(n_classes=n_classes)
+    for (name, param) in dyn_model.named_parameters():
+        if name.endswith('weight'):
+            nn.init.xavier_uniform_(param, gain=nn.init.calculate_gain('relu'))
+    optimizer = optim.Adam(dyn_model.parameters(), lr=0.0001)
+    for epoch in range(10000):
+        n_objs = np.random.randint(2, 3)
+
+        prev = np.random.randint(0, 5, size=n_objs)
+        #prev = np.array([np.random.randint(2, 3), np.random.randint(7, 8)])
+        shifts = np.random.randint(-1, 2, size=n_objs)
+        cur = prev + shifts
+        for i in range(len(cur)):
+            if cur[i] < 0:
+                cur[i] = -cur[i]
+                shifts[i] = -shifts[i]
+            if cur[i] >= 5:
+                cur[i] = 4-(cur[i]-4)
+                shifts[i] = -shifts[i]
+        targ = cur + shifts
+        for i in range(len(targ)):
+            if targ[i] < 0:
+                targ[i] = -targ[i]
+            if targ[i] >= 5:
+                targ[i] = 4-(targ[i]-4)
+
+        prev = prev.reshape(1, n_objs, 1)
+        prev = [torch.Tensor(n) for n in prev]
+        cur = cur.reshape(1, n_objs, 1)
+        cur = [torch.Tensor(n) for n in cur]
+        targ = targ.reshape(1, n_objs, 1)
+        targ = [torch.Tensor(n) for n in targ]
+
+        pred = dyn_model.forward(cur, prev)
+
+        loss = torch.mean((rnn_utils.pad_sequence(pred)-rnn_utils.pad_sequence(targ))**2)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if epoch % 1000 == 0:
+            print(loss)
+            disp(cur, prev, pred)
+    print(loss)
+    disp(cur, prev, pred)

@@ -22,6 +22,10 @@ import time
 from tqdm import tqdm
 import pickle
 
+def collect_latent_dataset():
+    data = pickle.load(open('data/occlusions.pkl', 'rb')).astype(np.float32)
+    print(data.shape)
+
 def test_autoencoder():
     kl_weight = 1.0
     reconstr_weight = 1.0
@@ -165,4 +169,5 @@ def validate_model(logdir, epoch, val_dataloader, n_validation_samples, model_fo
         cv2.imwrite('data/{}/{}/reconstr_{}.png'.format(logdir, epoch, val_ind), (255*np.clip(reconstr_im, 0, 1)).astype(np.uint8))
 
 if __name__ == '__main__':
-    test_autoencoder()
+    #test_autoencoder()
+    collect_latent_dataset()

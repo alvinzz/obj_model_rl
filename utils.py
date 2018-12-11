@@ -11,7 +11,7 @@ def threshold_latent(latent, prev_latent=None, max_obj_size=3):
         for channel in latent:
             channel_locs = torch.nonzero(channel > 0.5)
             sorted_channel_locs = sort_merge_channel_locs(channel_locs, max_obj_size)
-            locs.extend(sorted_channel_locs)
+            locs.append(sorted_channel_locs)
         return locs
     else:
         locs = []
@@ -19,6 +19,7 @@ def threshold_latent(latent, prev_latent=None, max_obj_size=3):
             prev_channel_locs = torch.nonzero(prev_latent[ch_idx] > 0.5)
             channel_locs = torch.nonzero(channel > 0.5)
             sorted_channel_locs = sort_merge_channel_locs(channel_locs, max_obj_size)
+            corr_channel_locs = []
             for prev_loc in prev_channel_locs:
                 best_loc = None
                 best_dist = None
@@ -26,7 +27,8 @@ def threshold_latent(latent, prev_latent=None, max_obj_size=3):
                     if best_dist is None or manhat_dist(prev_loc, cand_loc) < best_dist:
                         best_dist = manhat_dist(prev_loc, cand_loc)
                         best_loc = cand_loc
-                locs.append(best_loc)
+                corr_channel_locs.append(best_loc)
+            locs.append(corr_channel_locs)
         return locs
 
 def sort_merge_channel_locs(channel_locs, max_obj_size=3):
@@ -53,11 +55,11 @@ def manhat_dist(l1, l2):
     return torch.abs(l1[0]-l2[0]) + torch.abs(l1[1]-l2[1])
 
 if __name__ == '__main__':
-    #latent = np.zeros((10, 10))
-    #latent[[0,1,5,5,5,0],[0,0,5,6,0,5]] = 1
-    #latent = np.tile(latent.reshape(1, 10, 10), (5, 1, 1))
-    #latent = torch.Tensor(latent)
-    #print(threshold_latent(latent))
+    latent = np.zeros((10, 10))
+    latent[[0,1,5,5,5,0],[0,0,5,6,0,5]] = 1
+    latent = np.tile(latent.reshape(1, 10, 10), (5, 1, 1))
+    latent = torch.Tensor(latent)
+    print(threshold_latent(latent))
 
     latent = np.zeros((10, 10))
     latent[[0,5,5,0],[0,0,5,5]] = 1
