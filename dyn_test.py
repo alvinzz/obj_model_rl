@@ -19,6 +19,12 @@ if __name__ == '__main__':
     #preds = interact.forward(obj_locs, prev_obj_locs)
     #print(preds)
 
+    #interact = PairwiseInteract(n_classes=2)
+    #obj_locs = [torch.Tensor([[5,5],[4,4]]),torch.Tensor([[1,1],[2,2],[3,3]])]
+    #prev_obj_locs = [torch.Tensor([[5,5],[4,4]]),torch.Tensor([[1,1],[2,2],[3,3]])]
+    #preds = interact.forward(obj_locs, prev_obj_locs)
+    #print(preds)
+
     def disp(cur, prev, pred):
         cur = cur[0].detach().cpu().numpy().flatten().astype(np.int32)
         prev = prev[0].detach().cpu().numpy().flatten().astype(np.int32)
@@ -38,7 +44,7 @@ if __name__ == '__main__':
         cv2.destroyAllWindows()
 
     n_classes = 1
-    dyn_model = PairwiseInteract(n_classes=n_classes)
+    dyn_model = PairwiseInteract(get_force_layer_sizes=[2*1, 50, 50, 50, 20], apply_force_layer_sizes=[20, 50, 1], n_classes=n_classes)
     for (name, param) in dyn_model.named_parameters():
         if name.endswith('weight'):
             nn.init.xavier_uniform_(param, gain=nn.init.calculate_gain('relu'))

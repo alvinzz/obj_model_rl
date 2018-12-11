@@ -27,7 +27,7 @@ class MLP(nn.Module):
         return x
 
 class PairwiseInteract(nn.Module):
-    def __init__(self, get_force_layer_sizes=[2*1, 50, 50, 50, 20], apply_force_layer_sizes=[20, 50, 1], n_classes=2):
+    def __init__(self, get_force_layer_sizes=[2*2, 100, 100, 100, 250], apply_force_layer_sizes=[250, 100, 100, 2], n_classes=2):
         assert get_force_layer_sizes[0] == 2*apply_force_layer_sizes[-1], 'need consistent state size'
         assert get_force_layer_sizes[-1] == apply_force_layer_sizes[0], 'need consistent force size'
         super(PairwiseInteract, self).__init__()
@@ -56,9 +56,9 @@ class PairwiseInteract(nn.Module):
         for (actor, actor_objs) in zip(self.actors, obj_locs+prev_obj_locs):
             for (c, (actee, actee_objs)) in enumerate(zip(self.actees, obj_locs)):
                 combs = torch.stack([
-                    actor_objs.reshape(1, -1).repeat(len(actee_objs), 1).flatten(),
-                    actee_objs.reshape(-1, 1).repeat(1, len(actor_objs)).flatten(),
-                ]).transpose(1, 0)
+                    actor_objs.reshape(1, -1, self.state_dim).repeat(len(actee_objs), 1, 1).reshape(-1, self.state_dim),
+                    actee_objs.reshape(-1, 1, self.state_dim).repeat(1, len(actor_objs), 1).reshape(-1, self.state_dim),
+                ], dim=1).reshape(-1, len(actor_objs), 2*self.state_dim)
                 comb_forces = self.get_force_modules[(actor, actee)](combs)
                 forces[c] += torch.sum(
                     comb_forces.reshape(len(actee_objs), len(actor_objs), self.force_dim),

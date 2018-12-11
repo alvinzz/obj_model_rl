@@ -3,22 +3,38 @@ import cv2
 import pickle
 import torch
 import itertools
+eps = 1e-5
+
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda" if use_cuda else "cpu")
 
 # max_obj_size in latent space
 def threshold_latent(latent, prev_latent=None, max_obj_size=3):
     if prev_latent is None:
         locs = []
-        for channel in latent:
-            channel_locs = torch.nonzero(channel > 0.5)
-            sorted_channel_locs = sort_merge_channel_locs(channel_locs, max_obj_size)
+        for (ch_idx, channel) in enumerate(latent):
+            channel_locs = torch.nonzero(channel > eps)
+            #TODO
+            if ch_idx == 1:
+                _, max_loc = channel.reshape(-1).max(0)
+                channel_locs = torch.Tensor([[max_loc // latent[1].shape[0], torch.remainder(max_loc, latent[1].shape[0])]]).type(torch.LongTensor).to(device)
+            sorted_channel_locs = sort_merge_channel_locs(channel_locs, latent, max_obj_size)
             locs.append(sorted_channel_locs)
         return locs
     else:
         locs = []
         for (ch_idx, channel) in enumerate(latent):
-            prev_channel_locs = torch.nonzero(prev_latent[ch_idx] > 0.5)
-            channel_locs = torch.nonzero(channel > 0.5)
-            sorted_channel_locs = sort_merge_channel_locs(channel_locs, max_obj_size)
+            prev_channel_locs = sort_merge_channel_locs(torch.nonzero(prev_latent[ch_idx] > eps), latent, max_obj_size)
+            channel_locs = torch.nonzero(channel > eps)
+            sorted_channel_locs = sort_merge_channel_locs(channel_locs, latent, max_obj_size)
+            #TODO
+            if ch_idx == 1:
+                _, max_loc = channel.reshape(-1).max(0)
+                sorted_channel_locs = torch.Tensor([[max_loc // latent[1].shape[0], torch.remainder(max_loc, latent[1].shape[0])]]).type(torch.LongTensor).to(device)
+                _, max_loc = prev_latent[ch_idx].reshape(-1).max(0)
+                prev_channel_locs = torch.Tensor([[max_loc // latent[1].shape[0], torch.remainder(max_loc, latent[1].shape[0])]]).type(torch.LongTensor).to(device)
+            if len(prev_channel_locs) != len(sorted_channel_locs):
+                return None
             corr_channel_locs = []
             for prev_loc in prev_channel_locs:
                 best_loc = None
@@ -31,7 +47,7 @@ def threshold_latent(latent, prev_latent=None, max_obj_size=3):
             locs.append(corr_channel_locs)
         return locs
 
-def sort_merge_channel_locs(channel_locs, max_obj_size=3):
+def sort_merge_channel_locs(channel_locs, latent, max_obj_size=3):
     sorted_channel_locs = []
     idx = 0
     for y in range(latent.shape[1]):

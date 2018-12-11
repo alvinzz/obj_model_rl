@@ -21,10 +21,63 @@ from gumbel_softmax import *
 import time
 from tqdm import tqdm
 import pickle
+import copy
 
 def collect_latent_dataset():
+    use_cuda = torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+
     data = pickle.load(open('data/occlusions.pkl', 'rb')).astype(np.float32)
-    print(data.shape)
+    data = data.transpose([0,1,4,2,3])
+    enc = Encoder([3,96,96,8], [0,0,0,8], 8).to(device)
+    dec = Decoder([9,96,96,3], 8).to(device)
+    params = {}
+    for (k, v) in enc.named_parameters():
+        params['enc.'+k.replace('__', '.')] = v
+    for (k, v) in dec.named_parameters():
+        params['dec.'+k.replace('__', '.')] = v
+    params = init_weights(
+        params, file='data/occlusion_ae_kl__250000_11-12-2018_04-26/9/params.pkl',
+        device=device
+    )
+
+    from utils import threshold_latent
+    new_dataset = []
+    for i in range(data.shape[1]):
+        print(i)
+        cand_seq = []
+        for t in range(data.shape[0]):
+            ims_tensor = torch.Tensor(data[t, i].reshape(1, 3, 64, 64) / np.max(data[t, i])).to(device)
+            latent = 1 - torch.exp(-enc(ims_tensor))
+            #TODO: make general
+            latent = latent[0,[3,4],:,:]
+            if t == 0:
+                threshed_latent = threshold_latent(latent)
+                if threshed_latent is None:
+                    cand_seq = []
+                    prev_latent = None
+                    continue
+                else:
+                    cand_seq = [[torch.stack(k, dim=0) if k else [] for k in threshed_latent]]
+                    prev_latent = latent
+            else:
+                threshed_latent = threshold_latent(latent, prev_latent)
+                if threshed_latent is None:
+                    threshed_latent = threshold_latent(latent)
+                    if threshed_latent is None:
+                        cand_seq = []
+                        prev_latent = None
+                        continue
+                    else:
+                        cand_seq = [[torch.stack(k, dim=0) if k else [] for k in threshed_latent]]
+                        prev_latent = latent
+                else:
+                    cand_seq.append([torch.stack(k, dim=0) if k else [] for k in threshed_latent])
+                    if len(cand_seq) == 3:
+                        new_dataset.append(copy.deepcopy(cand_seq))
+                        cand_seq.pop(0)
+                    prev_latent = latent
+    pickle.dump(new_dataset, open('data/occlusion_latent.pkl', 'wb'))
 
 def test_autoencoder():
     kl_weight = 1.0
@@ -62,7 +115,7 @@ def test_autoencoder():
     model_forward = lambda ims_tensor: ae_forward(enc, dec, ims_tensor)
     params = init_weights(
         params, file='data/occlusion_ae_kl__250000_11-12-2018_04-26/9/params.pkl',
-        dataloader=train_dataloader, device=device
+        device=device
     )
     for epoch in range(10): #10 #30
         for (train_ind, rollout) in tqdm(enumerate(train_dataloader)):
@@ -92,7 +145,7 @@ def test_autoencoder():
     print(epoch, kl_weight*kl_loss.detach().cpu().numpy(), reconstr_weight*reconstr_loss.detach().cpu().numpy())
     validate_model(logdir, epoch, val_dataloader, n_validation_samples, model_forward, params, device)
 
-def init_weights(params, file=None, dataloader=None, device=None):
+def init_weights(params, file=None, device=None):
     if file is not None:
         saved_weights = pickle.load(open(file, 'rb'))
         for (k, v) in saved_weights.items():
