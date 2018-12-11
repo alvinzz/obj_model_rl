@@ -19,11 +19,12 @@ if __name__ == '__main__':
     #preds = interact.forward(obj_locs, prev_obj_locs)
     #print(preds)
 
-    #interact = PairwiseInteract(n_classes=2)
-    #obj_locs = [torch.Tensor([[5,5],[4,4]]),torch.Tensor([[1,1],[2,2],[3,3]])]
-    #prev_obj_locs = [torch.Tensor([[5,5],[4,4]]),torch.Tensor([[1,1],[2,2],[3,3]])]
-    #preds = interact.forward(obj_locs, prev_obj_locs)
-    #print(preds)
+    interact = PairwiseInteract(n_classes=2)
+    obj_locs = [torch.Tensor([[5,5],[4,4]]),torch.Tensor([[1,1],[2,2],[3,3]])]
+    prev_obj_locs = [torch.Tensor([[5,5],[4,4]]),torch.Tensor([[1,1],[2,2],[3,3]])]
+    preds = interact.forward(obj_locs, prev_obj_locs)
+    print(preds)
+    print(1/0)
 
     def disp(cur, prev, pred):
         cur = cur[0].detach().cpu().numpy().flatten().astype(np.int32)
