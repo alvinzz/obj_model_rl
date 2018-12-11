@@ -28,7 +28,12 @@ class PusherEnv(MujocoEnv, Serializable):
         #]).reshape(-1)
         img = self.render(mode='rgb_array')
         img = cv2.resize(img, (0, 0), fx=64./(500), fy=64./(500), interpolation=cv2.INTER_AREA)
-        
+        return img.flatten()
+
+    def relabeled_current_obs(self):
+        img = self.get_current_obs().reshape(64, 64, 3)
+        pusher_locs = np.where((img[:,:,0] == img[:,:,1]) & (img[:,:,0] > 0))
+        img[pusher_locs] = [160,0,0]
         return img.flatten()
 
     def get_state(self):
@@ -92,6 +97,17 @@ class MultiPointmassEnv(MujocoEnv, Serializable):
         
         return img.flatten()
 
+    def relabeled_current_obs(self):
+        img = self.get_current_obs().reshape(64, 64, 3)
+        background_locs = np.where((img[:,:,0] == img[:,:,1]) & (img[:,:,0] == img[:,:,2]) & (img[:,:,0] > 0))
+        img[background_locs] = [0,0,0]
+        yellow_locs = np.where((img[:,:,0] == img[:,:,1]) & (img[:,:,0] > 0))
+        img[yellow_locs] = [255,0,0]
+        green_locs = np.where((img[:,:,0] < img[:,:,1]))
+        img[green_locs] = [0,255,0]
+        blue_locs = np.where((img[:,:,2] > img[:,:,1]))
+        img[blue_locs] = [0,0,255]
+        return img.flatten()
 
     def step(self, action):
         self.forward_dynamics(action)
