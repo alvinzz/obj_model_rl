@@ -35,7 +35,7 @@ if __name__ == '__main__':
     n_classes = 2
     dyn_model = PairwiseInteract(n_classes=n_classes)
 
-    params = pickle.load(open('data/occusion_dyn_model.pkl', 'rb'))
+    params = pickle.load(open('data/occlusion_dyn_model.pkl', 'rb'))
 
     for (name, param) in dyn_model.named_parameters():
         param.data = torch.from_numpy(params[name])
@@ -50,23 +50,48 @@ if __name__ == '__main__':
     for (k, v) in dec.named_parameters():
         params['dec.'+k.replace('__', '.')] = v
     params = init_weights(
-        params, file='data/occlusion_ae_kl__250000_11-12-2018_04-26/9/params.pkl',
+        params, file='occlusion_params.pkl',
         device=device
     )
 
-    for (n, (prev, cur, targ)) in enumerate(dataset[:1000:50]):
-        if all([len(k) for k in prev]):
-            for t in range(50):
-                if t == 0:
-                    prev = [k.cpu().type(torch.FloatTensor) for k in prev]
-                    cur = [k.cpu().type(torch.FloatTensor) for k in cur]
-                    targ = [k.cpu().type(torch.FloatTensor) for k in targ]
-                    pred = dyn_model.forward(cur, prev)
-                    disp(prev, dec, 'occ_vids/{}im00.png'.format(n))
-                    disp(cur, dec, 'occ_vids/{}im01.png'.format(n))
-                    disp(pred, dec, 'occ_vids/{}im02.png'.format(n))
-                else:
-                    prev = cur
-                    cur = pred
-                    pred = dyn_model.forward(cur, prev)
-                    disp(pred, dec, 'occ_vids/{0:}im{1:02d}.png'.format(n, t+2))
+    for n in range(20):
+        for t in range(50):
+            if t == 0:
+                curtain_pos = np.random.uniform(10,54,size=(1,2)).astype(np.float32)
+                pos = np.tile(curtain_pos, (4,1))
+                while np.any(np.abs(pos[:,0] - curtain_pos[0,0]) < 10) \
+                or np.any(np.abs(pos[:,1] - curtain_pos[0,1]) < 10) \
+                or np.min(np.linalg.norm(pos[0:1] - pos[[1,2,3]], axis=1)) < 10 \
+                or np.min(np.linalg.norm(pos[1:2] - pos[[0,2,3]], axis=1)) < 10 \
+                or np.min(np.linalg.norm(pos[2:3] - pos[[0,1,3]], axis=1)) < 10 \
+                or np.min(np.linalg.norm(pos[3:4] - pos[[0,1,2]], axis=1)) < 10:
+                    pos = np.random.uniform(5,59,size=(4,2)).astype(np.float32)
+                shifts = np.random.uniform(-2,2,size=(4,2)).astype(np.float32)
+                prev = [torch.from_numpy(pos), torch.from_numpy(curtain_pos)]
+                cur = [torch.from_numpy(pos+shifts), torch.from_numpy(curtain_pos)]
+                pred = dyn_model.forward(cur, prev)
+                disp(prev, dec, 'occ_vids/{}im00.png'.format(n))
+                disp(cur, dec, 'occ_vids/{}im01.png'.format(n))
+                disp(pred, dec, 'occ_vids/{}im02.png'.format(n))
+            else:
+                prev = cur
+                cur = pred
+                pred = dyn_model.forward(cur, prev)
+                disp(pred, dec, 'occ_vids/{0:}im{1:02d}.png'.format(n, t+2))
+
+    #for (n, (prev, cur, targ)) in enumerate(dataset[:1000:50]):
+    #    if all([len(k) for k in prev]):
+    #        for t in range(50):
+    #            if t == 0:
+    #                prev = [k.cpu().type(torch.FloatTensor) for k in prev]
+    #                cur = [k.cpu().type(torch.FloatTensor) for k in cur]
+    #                targ = [k.cpu().type(torch.FloatTensor) for k in targ]
+    #                pred = dyn_model.forward(cur, prev)
+    #                disp(prev, dec, 'occ_vids/{}im00.png'.format(n))
+    #                disp(cur, dec, 'occ_vids/{}im01.png'.format(n))
+    #                disp(pred, dec, 'occ_vids/{}im02.png'.format(n))
+    #            else:
+    #                prev = cur
+    #                cur = pred
+    #                pred = dyn_model.forward(cur, prev)
+    #                disp(pred, dec, 'occ_vids/{0:}im{1:02d}.png'.format(n, t+2))
