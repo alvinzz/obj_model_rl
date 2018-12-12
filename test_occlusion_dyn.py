@@ -35,7 +35,7 @@ if __name__ == '__main__':
     n_classes = 2
     dyn_model = PairwiseInteract(n_classes=n_classes)
 
-    params = pickle.load(open('data/occusion_dyn_model.pkl', 'rb'))
+    params = pickle.load(open('data/occlusion_dyn_model.pkl', 'rb'))
 
     for (name, param) in dyn_model.named_parameters():
         param.data = torch.from_numpy(params[name])
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     for (k, v) in dec.named_parameters():
         params['dec.'+k.replace('__', '.')] = v
     params = init_weights(
-        params, file='data/occlusion_ae_kl__250000_11-12-2018_04-26/9/params.pkl',
+        params, file='occlusion_params.pkl',
         device=device
     )
 
