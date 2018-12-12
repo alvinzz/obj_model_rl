@@ -67,7 +67,7 @@ class PusherEnv(MujocoEnv, Serializable):
         reward = self.get_reward()
         #reward = np.linalg.norm(self.get_body_com('obj1')-self.get_body_com('target'))
         done = False
-        info = dict()
+        info = np.linalg.norm(self.get_body_com('target')[:2]-self.get_body_com('obj1')[:2])
 
         return observation, reward, done, info
 
@@ -125,7 +125,7 @@ class MultiPointmassEnv(MujocoEnv, Serializable):
         reward = np.linalg.norm(self.get_body_com('obj1')[:2]-np.array([.1 ,-.1]))+np.linalg.norm(self.get_body_com('obj2')[:2]-np.array([-.1, .1]))
 
         done = False
-        info = dict()
+        info = reward
 
         return observation, reward, done, info
 

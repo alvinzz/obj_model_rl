@@ -27,8 +27,12 @@ def collect_latent_dataset():
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    data = pickle.load(open('data/pusher_relabeled.pkl', 'rb')).astype(np.float32)
-    data = data.transpose([0,1,4,2,3])
+    data = pickle.load(open('data/pusher_dyn_relabeled.pkl', 'rb')).astype(np.float32)
+    data = data.transpose([1,0,4,2,3])
+    actions = pickle.load(open('data/pusher_actions.pkl', 'rb')).astype(np.float32)
+    actions = actions.transpose([1,0,2])
+    costs = pickle.load(open('data/pusher_costs.pkl', 'rb')).astype(np.float32)
+    costs = costs.transpose([1,0,2])
     enc = Encoder([3,96,96,8], [0,0,0,8], 8).to(device)
     dec = Decoder([9,96,96,3], 8).to(device)
     params = {}
@@ -48,18 +52,26 @@ def collect_latent_dataset():
         cand_seq = []
         for t in range(data.shape[0]):
             ims_tensor = torch.Tensor(data[t, i].reshape(1, 3, 64, 64) / np.max(data[t, i])).to(device)
+            action_tensor = torch.Tensor(actions[t, i]).to(device)
+            cost_tensor = torch.Tensor(costs[t, i]).to(device)
             latent = 1 - torch.exp(-enc(ims_tensor))
             #TODO: make general
             latent = latent[0,[2,3,5],:,:]
             if t == 0:
                 threshed_latent = threshold_latent(latent)
+                prev_action = action_tensor
+                prev_cost = cost_tensor
                 if threshed_latent is None:
                     cand_seq = []
                     prev_latent = None
+                    prev_action = action_tensor
+                    prev_cost = cost_tensor
                     continue
                 else:
                     cand_seq = [[torch.stack(k, dim=0) if k else [] for k in threshed_latent]]
                     prev_latent = latent
+                    prev_action = action_tensor
+                    prev_cost = cost_tensor
             else:
                 threshed_latent = threshold_latent(latent, prev_latent)
                 if threshed_latent is None:
@@ -67,17 +79,23 @@ def collect_latent_dataset():
                     if threshed_latent is None:
                         cand_seq = []
                         prev_latent = None
+                        prev_action = action_tensor
+                        prev_cost = cost_tensor
                         continue
                     else:
                         cand_seq = [[torch.stack(k, dim=0) if k else [] for k in threshed_latent]]
                         prev_latent = latent
+                        prev_action = action_tensor
+                        prev_cost = cost_tensor
                 else:
                     cand_seq.append([torch.stack(k, dim=0) if k else [] for k in threshed_latent])
                     if len(cand_seq) == 3:
-                        new_dataset.append(copy.deepcopy(cand_seq))
+                        new_dataset.append(copy.deepcopy(cand_seq)+[prev_action.clone(), prev_cost.clone()])
                         cand_seq.pop(0)
                     prev_latent = latent
-    pickle.dump(new_dataset, open('data/pusher_latent.pkl', 'wb'))
+                    prev_action = action_tensor
+                    prev_cost = cost_tensor
+    pickle.dump(new_dataset, open('data/pusher_dyn_latent.pkl', 'wb'))
 
 def test_autoencoder():
     kl_weight = 1.0
