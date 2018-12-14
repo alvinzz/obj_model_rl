@@ -28,7 +28,7 @@ class MLP(nn.Module):
 
 class PairwiseInteract(nn.Module):
     def __init__(self,
-        action_force_layer_sizes=[2, 100, 100, 100, 2],
+        action_force_layer_sizes=[4, 100, 100, 100, 2],
         get_force_layer_sizes=[2*2, 100, 100, 100, 2],
         apply_force_layer_sizes=[2+2, 100, 100, 100, 2],
         cost_layer_sizes=[2, 100, 100, 100, 1],
