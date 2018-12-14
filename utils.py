@@ -9,7 +9,7 @@ use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
 # max_obj_size in latent space
-def threshold_latent(latent, prev_latent=None, max_obj_size=5):
+def threshold_latent(latent, prev_latent=None, max_obj_size=7):
     if prev_latent is None:
         locs = []
         for (ch_idx, channel) in enumerate(latent):
